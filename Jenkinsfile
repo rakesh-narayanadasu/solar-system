@@ -19,6 +19,8 @@ pipeline {
 
         MONGO_USERNAME = credentials('mongo_username')
         MONGO_PASSWORD = credentials('mongo_password')
+
+        SONAR_SCANNER_HOME = tool 'sonar-scanner-6-1-0'; // SonarQube plugin version 6.1.0
     }    
 
     stages {
@@ -45,8 +47,10 @@ pipeline {
                             --scan './'
                             --out './'
                             --format 'ALL'
+                            --disableRetireJS
+                            --disableYarnAudit
                             --prettyPrint
-                        ''', odcInstallation: 'OWASP-Dep-Check-12-1-0'
+                        ''', odcInstallation: 'OWASP-Dep-Check-12-1-0'      // OWASP plugin version 12.1.0
 
                         dependencyCheckPublisher failedTotalCritical: 1, pattern: 'dependency-check-report.xml', stopBuild: true             
                     }
@@ -72,11 +76,42 @@ pipeline {
 
         stage ('Code Coverage') {
             steps {   
-                catchError(buildResult: 'SUCCESS', message: 'Oops! it will be fixed in future release', stageResult: 'UNSTABLE') {
+                catchError(buildResult: 'SUCCESS', message: 'Oops! it will be fixed in future release', stageResult: 'UNSTABLE') {  // Prevent pipeline from failure
                     sh 'npm run coverage'
                 }                
             }
-        }               
+        }  
+
+        // stage ('SAST - SonarQube') {
+        //     steps {
+        //         sh 'echo $SONAR_SCANNER_HOME'
+        //         sh '''
+        //             $SONAR_SCANNER_HOME/bin/sonar-scanner \
+        //                 -Dsonar.host.url=http://54.210.121.126:9000 \
+        //                 -Dsonar.token=sqp_09ed7d3bbd6d590eadb26f6e3641ec4b1876d44b \
+        //                 -Dsonar.projectKey=solar-system \
+        //                 -Dsonar.sources=app.js \
+        //                 -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+        //         '''
+        //     }
+        // }
+
+        stage ('SAST - SonarQube') {
+            steps {
+                timeout(time: 60, unit: 'SECONDS') {
+                    withSonarQubeEnv('sonar-qube-server') {      // Configure SonarQuber server in System with sonarqube URL and Token
+                        sh 'echo $SONAR_SCANNER_HOME'
+                        sh '''
+                            $SONAR_SCANNER_HOME/bin/sonar-scanner \
+                                -Dsonar.projectKey=solar-system \
+                                -Dsonar.sources=app.js \
+                                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                        '''
+                    }
+                    waitForQualityGate abortPipeline: true
+                }    
+            }
+        }                     
     }
     post {
         always {
