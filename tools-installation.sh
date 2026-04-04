@@ -57,8 +57,7 @@ kubectl -n solar-system create secret generic mongo-db-creds \
 # Get TLS certificate of sealed secret
 kubectl -n kube-system get secrets | grep sealed
 
-kubectl -n kube-system get secrets sealed-secrets-keyp69pk -o json | jq -r .data'."tls.crt"' | base64 -d > sealedSecr
-et-publicCert.cr
+kubectl -n kube-system get secrets sealed-secrets-keyp69pk -o json | jq -r .data'."tls.crt"' | base64 -d > sealedSecret-publicCert.crt
 
 ## Now create encrypter secret
 kubeseal -o yaml --scope cluster-wide --cert sealedSecret-publicCert.crt < mongo-creds_k8s-secret.yaml > mongo-creds_sealed-secret.yaml
