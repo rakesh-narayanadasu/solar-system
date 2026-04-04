@@ -43,3 +43,20 @@ tar -xvzf kubeseal-${KUBESEAL_VERSION}-linux-amd64.tar.gz kubeseal
 sudo install -m 755 kubeseal /usr/local/bin/kubeseal
 
 kubeseal --version
+
+
+# Configure Sealed Secret
+
+kubectl create ns solar-system
+
+kubectl -n solar-system create secret generic mongo-db-creds --from-literal=MONGO_USERNAME=superuser \
+  --from-literal=MONGO_PASSWORD=SuperPassword --save-config --dry-run=client -o yaml > mongo-creds_k8s-secret.yaml
+
+# Get TLS certificate of sealed secret
+kubectl -n kube-system get secrets | grep sealed
+
+kubectl -n kube-system get secrets sealed-secrets-keyp69pk -o json | jq -r .data'."tls.crt"' | base64 -d > sealedSecr
+et-publicCert.cr
+
+## Now create encrypter secret
+kubeseal -o yaml --scope cluster-wide --cert sealedSecret-publicCert.crt < mongo-creds_k8s-secret.yaml > mongo-creds_sealed-secret.yaml
