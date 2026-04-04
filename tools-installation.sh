@@ -49,8 +49,10 @@ kubeseal --version
 
 kubectl create ns solar-system
 
-kubectl -n solar-system create secret generic mongo-db-creds --from-literal=MONGO_USERNAME=superuser \
-  --from-literal=MONGO_PASSWORD=SuperPassword --save-config --dry-run=client -o yaml > mongo-creds_k8s-secret.yaml
+kubectl -n solar-system create secret generic mongo-db-creds \
+  --from-literal=MONGO_URI=mongodb+srv://supercluster.d83jj.mongodb.net/superData \
+  --from-literal=MONGO_USERNAME=superuser --from-literal=MONGO_PASSWORD=SuperPassword \
+  --save-config --dry-run=client -o yaml > mongo-creds_k8s-secret.yaml  
 
 # Get TLS certificate of sealed secret
 kubectl -n kube-system get secrets | grep sealed
