@@ -259,7 +259,38 @@ pipeline {
                     '''
                 }
             }
-        }          
+        }  
+
+        stage ('App Deployed?') {
+            when {
+                branch 'PR*'
+            }
+            steps {
+                timeout(time: 1, unit: 'DAYS') {
+                    input message: 'Is the PR Merged and ArgoCD Synced?', ok: 'Yes! PR is Merged and ArgoCD Application is Synced'
+                }
+            }
+        }  
+
+        stage ('DAST - OWASP ZAP') {
+            when {
+                branch 'PR*'
+            }
+            steps {
+                sh '''
+                    ### Replace below with kubernetes http://IP_Address:3000/api-docs/
+                    chmod 777 $(pwd)
+                    docker run -v $(pwd):/zap/wrk/:rw ghcr.io/zaproxy/zaproxy zap-api-scan.py \
+                        -t http://32.192.229.171:4000/api-docs/ \
+                        -f openapi \
+                        -r zap_report.html \
+                        -w zap_report.md \
+                        -J zap_json_report.json \
+                        -x zap_xml_report.xml \
+                        -c zap_ignore_rules     # create zap_ignore_rules file and add ID IGNORE <endpoint> eg: 100001	IGNORE	http://32.192.229.171:4000
+                '''
+            }
+        }      
     }
     post {
         always {
@@ -279,6 +310,8 @@ pipeline {
             publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, icon: '', keepAll: true, reportDir: './', reportFiles: 'trivy-image-MEDIUM-results.html', reportName: 'Trivy Image Medium Vul Report', reportTitles: '', useWrapperFileDirectly: true]) 
 
             publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, icon: '', keepAll: true, reportDir: './', reportFiles: 'trivy-image-CRITICAL-results.html', reportName: 'Trivy Image Critical Vul Report', reportTitles: '', useWrapperFileDirectly: true])
+
+            publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, icon: '', keepAll: true, reportDir: './', reportFiles: 'zap_report.html', reportName: 'DAST OWASP ZAP Report', reportTitles: '', useWrapperFileDirectly: true])
 
             junit allowEmptyResults: true, testResults: 'trivy-image-MEDIUM-results.xml'
 
