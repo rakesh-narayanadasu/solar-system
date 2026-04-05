@@ -323,7 +323,65 @@ pipeline {
                     input message: 'Deploy to Production?', ok: 'Yes! Lets deploy on Production', submitter: 'admin'
                 }
             }
-        }    
+        }  
+
+        stage ('Lambda - S3 Upload & Deploy') {
+            when {
+                branch 'main'
+            }
+            steps {
+                withAWS(credentials: 'aws-ec2-s3-lambda', region: 'us-east-1') {
+                    sh '''
+                        tail -5 app.js
+                        echo "******************************************************"
+                        sed -i "/^app\\.listen(3000/ s/^/\\/\\//" app.js
+                        sed -i "s/^module.exports = app;/\\/\\/module.exports = app;/g" app.js
+                        sed -i "s|^//module.exports.handler|module.exports.handler|" app.js
+                        echo "******************************************************"
+                        tail -5 app.js
+                    '''
+                    sh '''
+                        zip -qr solar-system-lambda-$BUILD_ID.zip app* package* index.html node*
+                        ls -ltr solar-system-lambda-$BUILD_ID.zip
+                    '''
+                    s3Upload (
+                        file: "solar-system-lambda-${BUILD_ID}.zip",
+                        bucket: 'solar-system-demo-lambda'
+                    )
+                    sh '''
+                        aws lambda update-function-configuration \
+                            --function-name solar-system-function \
+                            --environment '{"Variables":{ "MONGO_USERNAME": "${MONGO_USERNAME}",
+                            "MONGO_PASSWORD": "${MONGO_PASSWORD}", "MONGO_URI": "${MONGO_URI}"}}'
+                    '''
+                    sh '''
+                        aws lambda update-function-code \
+                            --function-name solar-system-function \
+                            --s3-bucket solar-system-demo-lambda \
+                            --s3-key solar-system-lambda-$BUILD_ID.zip
+                    '''
+                }
+            }
+        }  
+
+        stage ('Lambda - Invoke Function') {
+            when {
+                branch 'main'
+            }
+            steps {
+                withAWS(credentials: 'aws-ec2-s3-lambda', region: 'us-east-1') {
+                    sh '''
+                        sleep 30s
+
+                        function_url_data=$(aws lambda get-function-url-config --function-name solar-system-function)
+
+                        function_url=$(echo $function_url_data | jq -r '.FunctionUrl | sub("/$"; "")')
+
+                        curl -Is $function_url/live | grep -i "200 OK"
+                    '''
+                }
+            }
+        }
     }
     post {
         always {
